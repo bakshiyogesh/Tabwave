@@ -37,7 +37,6 @@ export default function App() {
   const [recentHistory, setRecentHistory] = useState<RecentAudioEntry[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [showProModal, setShowProModal] = useState(false);
-  const [pausedTabs, setPausedTabs] = useState<Set<number>>(new Set());
   const [permissionNotice, setPermissionNotice] = useState<string | null>(null);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -165,16 +164,8 @@ export default function App() {
       return;
     }
     setPermissionNotice(null);
-    setPausedTabs((prev) => {
-      const next = new Set(prev);
-      if (next.has(tabId)) {
-        next.delete(tabId);
-      } else {
-        next.add(tabId);
-      }
-      return next;
-    });
-    setTimeout(refreshData, 600);
+    await refreshData();
+    setTimeout(refreshData, 500);
   };
 
   const handlePauseAll = async (e: React.MouseEvent) => {
@@ -385,7 +376,6 @@ export default function App() {
                 <div className="divide-y divide-zinc-100/60 dark:divide-zinc-800/40">
                   {audibleTabs.map((tab, idx) => {
                     const isSelected = idx === selectedIndex;
-                    const isPaused = pausedTabs.has(tab.id);
                     return (
                       <div
                         key={tab.id}
@@ -458,8 +448,8 @@ export default function App() {
                         {/* Right Actions: Exactly Two 28px IconButtons with 4px gap */}
                         <div className="flex items-center gap-1 flex-shrink-0">
                           <IconButton
-                            icon={isPaused ? Play : Pause}
-                            label={isPaused ? 'Play tab' : 'Pause tab'}
+                            icon={Pause}
+                            label="Pause tab"
                             onClick={(e) => handlePlayPauseToggle(e, tab.id)}
                           />
                           <IconButton
