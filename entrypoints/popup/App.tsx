@@ -5,13 +5,12 @@ import {
   Search,
   ExternalLink,
   Clock,
-  Sparkles,
   Radio,
-  Layers,
   X,
   Volume1,
   Play,
   Pause,
+  AlertCircle,
 } from 'lucide-react';
 import type { AudibleTabInfo, RecentAudioEntry } from '../../lib/types';
 import {
@@ -26,6 +25,10 @@ import {
 } from '../../lib/tabs';
 import { getRecentAudioHistory } from '../../lib/history';
 import { isPro, PRO_FEATURES } from '../../lib/license';
+import { IconButton } from './IconButton';
+
+// Feature flag to control PRO badge visibility
+const SHOW_PRO_BADGE = false;
 
 export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -34,8 +37,8 @@ export default function App() {
   const [recentHistory, setRecentHistory] = useState<RecentAudioEntry[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [showProModal, setShowProModal] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [pausedTabs, setPausedTabs] = useState<Set<number>>(new Set());
+  const [permissionNotice, setPermissionNotice] = useState<string | null>(null);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -50,7 +53,6 @@ export default function App() {
     setAudibleTabs(audible);
     setAllTabs(all);
     setRecentHistory(history);
-    setLoading(false);
   };
 
   useEffect(() => {
@@ -145,7 +147,8 @@ export default function App() {
 
   const allMuted = audibleTabs.length > 0 && audibleTabs.every((t) => t.muted);
 
-  const handleToggleMuteAll = async () => {
+  const handleToggleMuteAll = async (e: React.MouseEvent) => {
+    e.stopPropagation();
     if (allMuted) {
       await unmuteAllAudibleTabs();
     } else {
@@ -156,7 +159,12 @@ export default function App() {
 
   const handlePlayPauseToggle = async (e: React.MouseEvent, tabId: number) => {
     e.stopPropagation();
-    await togglePlayPauseTab(tabId);
+    const result = await togglePlayPauseTab(tabId);
+    if (result.permissionDenied) {
+      setPermissionNotice('Page access was not granted to pause media. Mute still works without it.');
+      return;
+    }
+    setPermissionNotice(null);
     setPausedTabs((prev) => {
       const next = new Set(prev);
       if (next.has(tabId)) {
@@ -169,7 +177,8 @@ export default function App() {
     setTimeout(refreshData, 600);
   };
 
-  const handlePauseAll = async () => {
+  const handlePauseAll = async (e: React.MouseEvent) => {
+    e.stopPropagation();
     await pauseAllAudibleTabs();
     refreshData();
   };
@@ -180,7 +189,7 @@ export default function App() {
       onKeyDown={handleKeyDown}
     >
       {/* HEADER */}
-      <header className="px-3.5 py-3 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between bg-zinc-50/70 dark:bg-zinc-900/70 backdrop-blur-sm">
+      <header className="px-3 py-2.5 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between bg-zinc-50/70 dark:bg-zinc-900/70 backdrop-blur-sm">
         <div className="flex items-center gap-2">
           <div className="w-6 h-6 rounded-md bg-indigo-600 flex items-center justify-center text-white shadow-sm shadow-indigo-500/30">
             <Radio className="w-3.5 h-3.5 animate-pulse" />
@@ -195,38 +204,53 @@ export default function App() {
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1">
           {audibleTabs.length > 0 && (
             <>
-              <button
+              <IconButton
+                icon={Pause}
+                label="Pause all tabs"
+                text="Pause all"
                 onClick={handlePauseAll}
-                title="Pause all media tabs"
-                className="text-[11px] font-medium px-2 py-1 rounded bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 transition-colors flex items-center gap-1"
-              >
-                <Pause className="w-3 h-3 text-amber-500 fill-amber-500" />
-                Pause All
-              </button>
-              <button
+              />
+              <IconButton
+                icon={allMuted ? VolumeX : Volume2}
+                label={allMuted ? 'Unmute all tabs' : 'Mute all tabs'}
+                text={allMuted ? 'Unmute all' : 'Mute all'}
+                danger={allMuted}
                 onClick={handleToggleMuteAll}
-                title={allMuted ? 'Unmute all audio tabs' : 'Mute all audio tabs'}
-                className="text-[11px] font-medium px-2 py-1 rounded bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 transition-colors flex items-center gap-1"
-              >
-                {allMuted ? <Volume2 className="w-3 h-3 text-indigo-500" /> : <VolumeX className="w-3 h-3 text-red-500" />}
-                {allMuted ? 'Unmute All' : 'Mute All'}
-              </button>
+              />
             </>
           )}
 
-          <button
-            onClick={() => setShowProModal(true)}
-            className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/30 text-amber-600 dark:text-amber-400 hover:opacity-90 transition-opacity flex items-center gap-1"
-            title="View Pro features"
-          >
-            <Sparkles className="w-2.5 h-2.5" />
-            PRO
-          </button>
+          {SHOW_PRO_BADGE && isPro() && (
+            <button
+              onClick={() => setShowProModal(true)}
+              className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/30 text-amber-600 dark:text-amber-400 hover:opacity-90 transition-opacity flex items-center gap-1 h-[28px]"
+              title="View Pro features"
+            >
+              PRO
+            </button>
+          )}
         </div>
       </header>
+
+      {/* PERMISSION NOTICE (IF DENIED) */}
+      {permissionNotice && (
+        <div className="px-3 py-2 bg-amber-50 dark:bg-amber-950/40 border-b border-amber-200 dark:border-amber-800/50 flex items-start justify-between gap-2 text-[11px] text-amber-800 dark:text-amber-300">
+          <div className="flex items-start gap-1.5">
+            <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+            <span>{permissionNotice}</span>
+          </div>
+          <button
+            onClick={() => setPermissionNotice(null)}
+            className="text-amber-600 dark:text-amber-400 hover:opacity-80 p-0.5"
+            aria-label="Dismiss message"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* SEARCH INPUT */}
       <div className="p-3 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
@@ -361,6 +385,7 @@ export default function App() {
                 <div className="divide-y divide-zinc-100/60 dark:divide-zinc-800/40">
                   {audibleTabs.map((tab, idx) => {
                     const isSelected = idx === selectedIndex;
+                    const isPaused = pausedTabs.has(tab.id);
                     return (
                       <div
                         key={tab.id}
@@ -368,33 +393,56 @@ export default function App() {
                           jumpToTab(tab.id, tab.windowId);
                           window.close();
                         }}
-                        className={`group px-3 py-2.5 flex items-center gap-2.5 cursor-pointer transition-colors ${
+                        className={`group px-3 py-2 flex items-center gap-2.5 cursor-pointer transition-colors ${
                           isSelected
                             ? 'bg-indigo-50/80 dark:bg-indigo-950/40'
                             : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/50'
                         }`}
                       >
-                        {/* Favicon */}
-                        <div className="flex-shrink-0 w-4 h-4 flex items-center justify-center">
-                          {tab.favIconUrl ? (
-                            <img
-                              src={tab.favIconUrl}
-                              alt=""
-                              className="w-4 h-4 rounded-sm object-contain"
-                              onError={(e) => {
-                                (e.target as HTMLElement).style.display = 'none';
-                              }}
-                            />
-                          ) : (
-                            <div className="w-3.5 h-3.5 rounded bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center text-[9px] font-bold text-zinc-600 dark:text-zinc-300">
-                              {tab.hostname.charAt(0).toUpperCase()}
-                            </div>
-                          )}
+                        {/* Favicon & Mini Equalizer Container */}
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <div className="relative w-4 h-4 flex items-center justify-center">
+                            {tab.favIconUrl ? (
+                              <img
+                                src={tab.favIconUrl}
+                                alt=""
+                                className="w-4 h-4 rounded-sm object-contain"
+                                onError={(e) => {
+                                  (e.target as HTMLElement).style.display = 'none';
+                                }}
+                              />
+                            ) : (
+                              <div className="w-3.5 h-3.5 rounded bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center text-[9px] font-bold text-zinc-600 dark:text-zinc-300">
+                                {tab.hostname.charAt(0).toUpperCase()}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Equalizer Indicator next to favicon */}
+                          <div
+                            className="flex items-end gap-0.5 h-3.5 w-3"
+                            title={tab.muted ? 'Muted' : 'Playing audio'}
+                            aria-hidden="true"
+                          >
+                            {tab.audible && !tab.muted ? (
+                              <>
+                                <span className="w-0.5 bg-indigo-500 dark:bg-indigo-400 rounded-full animate-eq-1 inline-block" />
+                                <span className="w-0.5 bg-indigo-500 dark:bg-indigo-400 rounded-full animate-eq-2 inline-block" />
+                                <span className="w-0.5 bg-indigo-500 dark:bg-indigo-400 rounded-full animate-eq-3 inline-block" />
+                              </>
+                            ) : (
+                              <span className="w-1 h-1 rounded-full bg-zinc-300 dark:bg-zinc-600 my-auto" />
+                            )}
+                          </div>
                         </div>
 
                         {/* Title & Hostname */}
                         <div className="flex-1 min-w-0">
-                          <div className="text-xs font-medium truncate text-zinc-900 dark:text-zinc-100">
+                          <div
+                            className={`text-xs font-medium truncate text-zinc-900 dark:text-zinc-100 transition-opacity ${
+                              tab.muted ? 'opacity-70' : ''
+                            }`}
+                          >
                             {tab.title}
                           </div>
                           <div className="text-[11px] text-zinc-400 dark:text-zinc-500 truncate flex items-center gap-1.5">
@@ -407,49 +455,20 @@ export default function App() {
                           </div>
                         </div>
 
-                        {/* Equalizer Wave Indicator */}
-                        <div className="flex items-end gap-0.5 h-4 px-1" title={tab.muted ? 'Muted' : 'Playing audio'}>
-                          {tab.muted ? (
-                            <div className="flex items-center gap-0.5">
-                              <span className="w-1 h-1 rounded-full bg-zinc-300 dark:bg-zinc-600" />
-                              <span className="w-1 h-1 rounded-full bg-zinc-300 dark:bg-zinc-600" />
-                              <span className="w-1 h-1 rounded-full bg-zinc-300 dark:bg-zinc-600" />
-                            </div>
-                          ) : (
-                            <>
-                              <span className="w-0.5 bg-indigo-500 dark:bg-indigo-400 rounded-full animate-eq-1 inline-block" />
-                              <span className="w-0.5 bg-indigo-500 dark:bg-indigo-400 rounded-full animate-eq-2 inline-block" />
-                              <span className="w-0.5 bg-indigo-500 dark:bg-indigo-400 rounded-full animate-eq-3 inline-block" />
-                              <span className="w-0.5 bg-indigo-500 dark:bg-indigo-400 rounded-full animate-eq-4 inline-block" />
-                            </>
-                          )}
+                        {/* Right Actions: Exactly Two 28px IconButtons with 4px gap */}
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <IconButton
+                            icon={isPaused ? Play : Pause}
+                            label={isPaused ? 'Play tab' : 'Pause tab'}
+                            onClick={(e) => handlePlayPauseToggle(e, tab.id)}
+                          />
+                          <IconButton
+                            icon={tab.muted ? VolumeX : Volume2}
+                            label={tab.muted ? 'Unmute tab' : 'Mute tab'}
+                            danger={tab.muted}
+                            onClick={(e) => handleMuteToggle(e, tab)}
+                          />
                         </div>
-
-                        {/* Play/Pause Button */}
-                        <button
-                          onClick={(e) => handlePlayPauseToggle(e, tab.id)}
-                          title={pausedTabs.has(tab.id) ? 'Resume playback' : 'Pause playback'}
-                          className="p-1.5 rounded-md text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-                        >
-                          {pausedTabs.has(tab.id) ? (
-                            <Play className="w-3.5 h-3.5 text-emerald-500 fill-emerald-500" />
-                          ) : (
-                            <Pause className="w-3.5 h-3.5 text-zinc-700 dark:text-zinc-300 fill-current" />
-                          )}
-                        </button>
-
-                        {/* Mute/Unmute Button */}
-                        <button
-                          onClick={(e) => handleMuteToggle(e, tab)}
-                          title={tab.muted ? 'Unmute tab' : 'Mute tab'}
-                          className={`p-1.5 rounded-md transition-colors ${
-                            tab.muted
-                              ? 'text-red-500 bg-red-50 dark:bg-red-950/40 hover:bg-red-100 dark:hover:bg-red-900/60'
-                              : 'text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800'
-                          }`}
-                        >
-                          {tab.muted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
-                        </button>
                       </div>
                     );
                   })}
@@ -512,19 +531,17 @@ export default function App() {
                         </div>
                       </div>
 
-                      {/* Time Ago */}
-                      <div className="text-[10px] text-zinc-400 dark:text-zinc-500 flex-shrink-0">
-                        {formatTimeAgo(item.lastAudibleAt)}
+                      {/* Right side: Time Ago + Action */}
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <span className="text-[10px] text-zinc-400 dark:text-zinc-500">
+                          {formatTimeAgo(item.lastAudibleAt)}
+                        </span>
+                        <IconButton
+                          icon={Play}
+                          label="Resume tab"
+                          onClick={(e) => handlePlayPauseToggle(e, item.tabId)}
+                        />
                       </div>
-
-                      {/* Quick Resume Button */}
-                      <button
-                        onClick={(e) => handlePlayPauseToggle(e, item.tabId)}
-                        title="Resume media on this tab"
-                        className="p-1 rounded text-zinc-400 hover:text-emerald-500 dark:hover:text-emerald-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors flex-shrink-0"
-                      >
-                        <Play className="w-3 h-3 fill-current" />
-                      </button>
                     </div>
                   ))}
                 </div>
@@ -558,15 +575,12 @@ export default function App() {
         </div>
       </footer>
 
-      {/* PRO FEATURES PREVIEW MODAL */}
-      {showProModal && (
+      {/* PRO FEATURES PREVIEW MODAL (GATED) */}
+      {showProModal && SHOW_PRO_BADGE && (
         <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-xs flex flex-col justify-end">
           <div className="bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800 rounded-t-xl p-4 shadow-2xl animate-in slide-in-from-bottom duration-150">
             <div className="flex items-center justify-between pb-2 border-b border-zinc-100 dark:border-zinc-800">
-              <div className="flex items-center gap-1.5">
-                <Sparkles className="w-4 h-4 text-amber-500" />
-                <h3 className="text-xs font-semibold">TabEcho Pro Features</h3>
-              </div>
+              <h3 className="text-xs font-semibold">TabEcho Pro Features</h3>
               <button
                 onClick={() => setShowProModal(false)}
                 className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 p-0.5"

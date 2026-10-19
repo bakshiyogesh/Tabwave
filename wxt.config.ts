@@ -10,7 +10,7 @@ export default defineConfig({
     description: 'Find, jump to, and mute tabs playing audio across all windows.',
     version: '1.0.0',
     permissions: ['tabs', 'storage', 'scripting'],
-    host_permissions: ['<all_urls>'],
+    optional_host_permissions: ['<all_urls>'],
     action: {
       default_title: 'TabEcho - Find Audio Tabs',
       default_popup: 'popup.html',

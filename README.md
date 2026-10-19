@@ -139,7 +139,8 @@ TabEcho exists solely to detect audible browser tabs, display their playback sta
 ### 4. Permissions Justification
 - `tabs`: Required strictly to read `tab.audible`, `tab.mutedInfo`, title, URL, and favicon, and to invoke `chrome.tabs.update` for jumping and muting.
 - `storage`: Required to store the last 30 minutes of audible tab history in `chrome.storage.local`.
-- **Zero Host Permissions**: No `<all_urls>` or content script injection needed.
+- `scripting`: Required to send pause/play control signals to media elements.
+- `optional_host_permissions`: `<all_urls>` is declared as **optional** only. It is never requested at install time. Page access is requested only on-demand when the user clicks the Pause button, and no page content is ever read, indexed, or stored.
 
 ---
 
@@ -149,6 +150,7 @@ TabEcho exists solely to detect audible browser tabs, display their playback sta
 - **Zero Tracking**: No analytics, telemetry, fingerprinting, or tracking scripts.
 - **Zero Network Calls**: No external servers, APIs, or databases. The extension functions completely offline.
 - **Local Storage Only**: The 30-minute audio history is stored strictly on your device inside `chrome.storage.local` and never leaves your browser.
+- **On-Demand Page Access**: Optional host access is requested exclusively when you click the "Pause" button to pause media. No page content or DOM text is read, recorded, or transmitted.
 - **Automatic Pruning**: Closed tabs and entries older than 30 minutes are automatically deleted.
 
 ---
@@ -190,3 +192,12 @@ To verify all features, perform this structured test across multiple windows:
 8. **Alt+P Shortcut**:
    - Switch to an empty tab and press <kbd>Alt</kbd>+<kbd>P</kbd>.
    - Verify it immediately jumps to the actively audible or most recently audible tab.
+## Roadmap
+
+Planned, in no fixed order. The free core stays free.
+
+- Search inside open tabs (page text)
+- Search video and podcast transcripts
+- Saved tab sessions
+
+Want something first? comment down .

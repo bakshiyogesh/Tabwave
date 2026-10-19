@@ -106,10 +106,31 @@ export async function unmuteAllAudibleTabs(): Promise<void> {
 }
 
 /**
+ * Request optional host permission on demand if not already granted.
+ */
+export async function requestHostPermission(): Promise<boolean> {
+  try {
+    const hasPermission = await chrome.permissions.contains({ origins: ['<all_urls>'] });
+    if (hasPermission) return true;
+    return await chrome.permissions.request({ origins: ['<all_urls>'] });
+  } catch (error) {
+    console.warn('[TabEcho] Error requesting host permissions:', error);
+    return false;
+  }
+}
+
+/**
  * Toggles play/pause on any HTML5 media element or supported web players in the specified tab.
  */
-export async function togglePlayPauseTab(tabId: number): Promise<{ success: boolean; state?: string }> {
+export async function togglePlayPauseTab(
+  tabId: number
+): Promise<{ success: boolean; permissionDenied?: boolean; state?: string }> {
   try {
+    const hasPermission = await requestHostPermission();
+    if (!hasPermission) {
+      return { success: false, permissionDenied: true };
+    }
+
     const results = await chrome.scripting.executeScript({
       target: { tabId, allFrames: true },
       func: () => {
