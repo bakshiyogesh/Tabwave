@@ -625,11 +625,25 @@ export default function App() {
                           </div>
                         </div>
 
-                        {/* Right side: Time Ago + Mute + Play (for regular media) */}
-                        <div className="flex items-center gap-1.5 flex-shrink-0">
-                          <span className="text-[10px] text-zinc-400 dark:text-zinc-500 mr-0.5">
+                        {/* Right side: Time Ago + Play + Mute (keeping symmetry with Now Playing: play/pause first, volume after) */}
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <span className="text-[10px] text-zinc-400 dark:text-zinc-500 mr-1">
                             {formatTimeAgo(item.lastAudibleAt)}
                           </span>
+                          {!item.isMeeting && (
+                            <IconButton
+                              icon={Play}
+                              label={
+                                isClosed
+                                  ? 'Tab is closed'
+                                  : cannotPlay
+                                  ? 'No music or media to play on this tab'
+                                  : 'Resume tab'
+                              }
+                              disabled={cannotPlay}
+                              onClick={(e) => handlePlayPauseToggle(e, item.tabId)}
+                            />
+                          )}
                           {liveTab && (
                             <IconButton
                               icon={isMuted ? VolumeX : Volume2}
@@ -644,20 +658,6 @@ export default function App() {
                               }
                               danger={isMuted}
                               onClick={(e) => handleMuteToggle(e, { id: item.tabId, muted: isMuted })}
-                            />
-                          )}
-                          {!item.isMeeting && (
-                            <IconButton
-                              icon={Play}
-                              label={
-                                isClosed
-                                  ? 'Tab is closed'
-                                  : cannotPlay
-                                  ? 'No music or media to play on this tab'
-                                  : 'Resume tab'
-                              }
-                              disabled={cannotPlay}
-                              onClick={(e) => handlePlayPauseToggle(e, item.tabId)}
                             />
                           )}
                         </div>
