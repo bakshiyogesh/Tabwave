@@ -7,6 +7,7 @@ export interface AudibleTabInfo {
   favIconUrl?: string;
   audible: boolean;
   muted: boolean;
+  isMeeting?: boolean;
 }
 
 export interface RecentAudioEntry {
@@ -17,8 +18,9 @@ export interface RecentAudioEntry {
   hostname: string;
   favicon?: string;
   lastAudibleAt: number; // Unix timestamp in ms
+  isMeeting?: boolean;
 }
 
-export interface TabEchoStorage {
+export interface TabWaveStorage {
   recentAudioHistory?: RecentAudioEntry[];
 }

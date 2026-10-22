@@ -21,7 +21,7 @@ export default defineBackground(() => {
         await chrome.action.setBadgeText({ text: '' });
       }
     } catch (err) {
-      console.error('[TabEcho Background] Failed to update badge:', err);
+      console.error('[TabWave Background] Failed to update badge:', err);
     }
   }
 

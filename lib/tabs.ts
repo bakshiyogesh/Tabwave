@@ -16,19 +16,69 @@ export function extractHostname(url?: string): string {
   }
 }
 
+const MEETING_DOMAINS = [
+  'meet.google.com',
+  'zoom.us',
+  'teams.microsoft.com',
+  'teams.live.com',
+  'webex.com',
+  'slack.com',
+  'discord.com',
+  'discordapp.com',
+  'whereby.com',
+  'gather.town',
+  'meet.jit.si',
+  'around.co',
+  'chime.aws',
+  'livestorm.co',
+  'ringcentral.com',
+  'gotomeeting.com',
+  'bluejeans.com',
+  'streamyard.com',
+  'riverside.fm',
+];
+
+/**
+ * Checks whether a tab is an interactive meeting, call, or live WebRTC audio tool
+ * where media cannot be paused/resumed, only muted.
+ */
+export function isLiveMeetingTab(tab: { url?: string; hostname?: string; title?: string }): boolean {
+  const host = (tab.hostname || extractHostname(tab.url)).toLowerCase();
+  if (MEETING_DOMAINS.some((domain) => host === domain || host.endsWith('.' + domain))) {
+    return true;
+  }
+
+  const urlLower = (tab.url || '').toLowerCase();
+  if (
+    urlLower.includes('meet.google.com') ||
+    urlLower.includes('zoom.us/j/') ||
+    urlLower.includes('teams.microsoft.com') ||
+    urlLower.includes('meet.jit.si') ||
+    urlLower.includes('/huddle/') ||
+    urlLower.includes('/call/')
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 /**
  * Converts a raw Chrome Tab object into a normalized AudibleTabInfo.
  */
 export function normalizeTab(tab: chrome.tabs.Tab): AudibleTabInfo {
+  const hostname = extractHostname(tab.url);
+  const isMeeting = isLiveMeetingTab({ url: tab.url, hostname, title: tab.title });
   return {
     id: tab.id ?? 0,
     windowId: tab.windowId,
     title: tab.title || 'Untitled Tab',
     url: tab.url || '',
-    hostname: extractHostname(tab.url),
+    hostname,
     favIconUrl: tab.favIconUrl,
     audible: Boolean(tab.audible),
     muted: Boolean(tab.mutedInfo?.muted),
+    isMeeting,
   };
 }
 
@@ -40,7 +90,7 @@ export async function getAudibleTabs(): Promise<AudibleTabInfo[]> {
     const tabs = await chrome.tabs.query({ audible: true });
     return tabs.filter((t) => t.id !== undefined).map(normalizeTab);
   } catch (error) {
-    console.error('[TabEcho] Error querying audible tabs:', error);
+    console.error('[TabWave] Error querying audible tabs:', error);
     return [];
   }
 }
@@ -53,7 +103,7 @@ export async function getAllTabs(): Promise<AudibleTabInfo[]> {
     const tabs = await chrome.tabs.query({});
     return tabs.filter((t) => t.id !== undefined).map(normalizeTab);
   } catch (error) {
-    console.error('[TabEcho] Error querying all tabs:', error);
+    console.error('[TabWave] Error querying all tabs:', error);
     return [];
   }
 }
@@ -67,7 +117,7 @@ export async function jumpToTab(tabId: number, windowId: number): Promise<boolea
     await chrome.windows.update(windowId, { focused: true });
     return true;
   } catch (error) {
-    console.error(`[TabEcho] Failed to jump to tab ${tabId} in window ${windowId}:`, error);
+    console.error(`[TabWave] Failed to jump to tab ${tabId} in window ${windowId}:`, error);
     return false;
   }
 }
@@ -80,7 +130,7 @@ export async function setTabMuted(tabId: number, muted: boolean): Promise<boolea
     await chrome.tabs.update(tabId, { muted });
     return true;
   } catch (error) {
-    console.error(`[TabEcho] Failed to set muted state on tab ${tabId}:`, error);
+    console.error(`[TabWave] Failed to set muted state on tab ${tabId}:`, error);
     return false;
   }
 }
@@ -114,7 +164,7 @@ export async function requestHostPermission(): Promise<boolean> {
     if (hasPermission) return true;
     return await chrome.permissions.request({ origins: ['<all_urls>'] });
   } catch (error) {
-    console.warn('[TabEcho] Error requesting host permissions:', error);
+    console.warn('[TabWave] Error requesting host permissions:', error);
     return false;
   }
 }
@@ -124,7 +174,7 @@ export async function requestHostPermission(): Promise<boolean> {
  */
 export async function togglePlayPauseTab(
   tabId: number
-): Promise<{ success: boolean; permissionDenied?: boolean; state?: string }> {
+): Promise<{ success: boolean; permissionDenied?: boolean; noMedia?: boolean; state?: string }> {
   try {
     const hasPermission = await requestHostPermission();
     if (!hasPermission) {
@@ -176,20 +226,20 @@ export async function togglePlayPauseTab(
         if (activePlaying) {
           // Pause only the actively playing element
           activePlaying.pause();
-          (activePlaying as any).__tabecho_user_paused = true;
+          (activePlaying as any).__tabwave_user_paused = true;
           return 'paused';
         }
 
         // If nothing is playing, find the one previously paused or with progress to resume
         const toResume =
-          allMedia.find((el) => (el as any).__tabecho_user_paused) ||
+          allMedia.find((el) => (el as any).__tabwave_user_paused) ||
           allMedia.find((el) => el.currentTime > 0 && !el.ended) ||
           allMedia.find((el) => el.duration > 0 && !el.ended) ||
           allMedia[0];
 
         if (toResume) {
           toResume.play().catch(() => {});
-          (toResume as any).__tabecho_user_paused = false;
+          (toResume as any).__tabwave_user_paused = false;
           return 'playing';
         }
 
@@ -198,17 +248,30 @@ export async function togglePlayPauseTab(
     });
 
     const hasAction = results && results.some((r) => r.result !== null && r.result !== undefined);
-    return { success: Boolean(hasAction) };
+    return { success: Boolean(hasAction), noMedia: !hasAction };
   } catch (error) {
-    console.warn(`[TabEcho] Unable to toggle playback on tab ${tabId}:`, error);
-    return { success: false };
+    console.warn(`[TabWave] Unable to toggle playback on tab ${tabId}:`, error);
+    return { success: false, noMedia: true };
   }
 }
 
 /**
- * Pauses all currently audible tabs.
+ * Checks whether a tab can support media playback (not a chrome internal page or non-playable tool).
+ */
+export function canTabPlayMedia(tab?: { url?: string; hostname?: string }): boolean {
+  if (!tab || !tab.url) return false;
+  if (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Pauses all currently audible media tabs (excluding live meetings & calls).
  */
 export async function pauseAllAudibleTabs(): Promise<void> {
   const audibleTabs = await getAudibleTabs();
-  await Promise.all(audibleTabs.map((t) => togglePlayPauseTab(t.id)));
+  await Promise.all(
+    audibleTabs.filter((t) => !t.isMeeting).map((t) => togglePlayPauseTab(t.id))
+  );
 }

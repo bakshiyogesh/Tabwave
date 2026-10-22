@@ -1,5 +1,5 @@
 /**
- * TabEcho Licensing & Feature Gating module
+ * TabWave Licensing & Feature Gating module
  * In v1 free tier, isPro() returns false.
  */
 

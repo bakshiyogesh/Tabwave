@@ -22,6 +22,7 @@ import {
   unmuteAllAudibleTabs,
   togglePlayPauseTab,
   pauseAllAudibleTabs,
+  canTabPlayMedia,
 } from '../../lib/tabs';
 import { getRecentAudioHistory } from '../../lib/history';
 import { isPro, PRO_FEATURES } from '../../lib/license';
@@ -38,6 +39,7 @@ export default function App() {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [showProModal, setShowProModal] = useState(false);
   const [permissionNotice, setPermissionNotice] = useState<string | null>(null);
+  const [unplayableTabIds, setUnplayableTabIds] = useState<Set<number>>(new Set());
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -84,6 +86,27 @@ export default function App() {
         tab.hostname.toLowerCase().includes(q)
     );
   }, [allTabs, searchQuery]);
+
+  // Clean deduplicated Recently Played history, excluding any tabs currently in Now Playing
+  const displayRecentHistory = useMemo(() => {
+    const audibleIds = new Set(audibleTabs.map((t) => t.id));
+    const seen = new Set<number>();
+    const list: RecentAudioEntry[] = [];
+
+    for (const item of recentHistory) {
+      // 1. Never show redundant entries for tabs that are actively in Now Playing
+      if (audibleIds.has(item.tabId)) {
+        continue;
+      }
+      // 2. Deduplicate multiple historical entries for the same tab
+      if (seen.has(item.tabId)) {
+        continue;
+      }
+      seen.add(item.tabId);
+      list.push(item);
+    }
+    return list;
+  }, [recentHistory, audibleTabs]);
 
   // Keep selectedIndex in bounds when results change
   useEffect(() => {
@@ -136,15 +159,19 @@ export default function App() {
     return `${hours}h ago`;
   };
 
-  const handleMuteToggle = async (e: React.MouseEvent, tab: AudibleTabInfo) => {
+  const handleMuteToggle = async (e: React.MouseEvent, tab: { id: number; muted: boolean }) => {
     e.stopPropagation();
     await setTabMuted(tab.id, !tab.muted);
     setAudibleTabs((prev) =>
       prev.map((t) => (t.id === tab.id ? { ...t, muted: !t.muted } : t))
     );
+    setAllTabs((prev) =>
+      prev.map((t) => (t.id === tab.id ? { ...t, muted: !t.muted } : t))
+    );
   };
 
   const allMuted = audibleTabs.length > 0 && audibleTabs.every((t) => t.muted);
+  const hasPausableTabs = audibleTabs.some((t) => !t.isMeeting);
 
   const handleToggleMuteAll = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -161,6 +188,10 @@ export default function App() {
     const result = await togglePlayPauseTab(tabId);
     if (result.permissionDenied) {
       setPermissionNotice('Page access was not granted to pause media. Mute still works without it.');
+      return;
+    }
+    if (!result.success || result.noMedia) {
+      setUnplayableTabIds((prev) => new Set(prev).add(tabId));
       return;
     }
     setPermissionNotice(null);
@@ -187,7 +218,7 @@ export default function App() {
           </div>
           <div>
             <h1 className="text-sm font-semibold tracking-tight flex items-center gap-1.5 leading-none">
-              TabEcho
+              TabWave
               <span className="text-[10px] font-mono px-1 py-0.2 bg-zinc-200/80 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 rounded">
                 v1.0
               </span>
@@ -198,12 +229,14 @@ export default function App() {
         <div className="flex items-center gap-1">
           {audibleTabs.length > 0 && (
             <>
-              <IconButton
-                icon={Pause}
-                label="Pause all tabs"
-                text="Pause all"
-                onClick={handlePauseAll}
-              />
+              {hasPausableTabs && (
+                <IconButton
+                  icon={Pause}
+                  label="Pause all media"
+                  text="Pause all"
+                  onClick={handlePauseAll}
+                />
+              )}
               <IconButton
                 icon={allMuted ? VolumeX : Volume2}
                 label={allMuted ? 'Unmute all tabs' : 'Mute all tabs'}
@@ -320,20 +353,57 @@ export default function App() {
 
                     {/* Title & Hostname */}
                     <div className="flex-1 min-w-0">
-                      <div className="text-xs font-medium truncate flex items-center gap-1.5">
+                      <div
+                        className={`text-xs font-medium truncate flex items-center gap-1.5 ${
+                          tab.muted ? 'opacity-70' : ''
+                        }`}
+                      >
                         <span className="truncate">{tab.title}</span>
+                        {tab.isMeeting && (
+                          <span className="flex-shrink-0 text-[9px] px-1 py-0.2 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 font-medium">
+                            Meeting
+                          </span>
+                        )}
                         {tab.audible && (
                           <span className="flex-shrink-0 text-[10px] px-1 py-0.2 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-medium">
                             Playing
                           </span>
                         )}
                       </div>
-                      <div className="text-[11px] text-zinc-400 dark:text-zinc-500 truncate">
-                        {tab.hostname}
+                      <div className="text-[11px] text-zinc-400 dark:text-zinc-500 truncate flex items-center gap-1.5">
+                        <span>{tab.hostname}</span>
+                        {tab.muted && (
+                          <span className="text-[10px] text-red-500 font-medium">
+                            (Muted)
+                          </span>
+                        )}
                       </div>
                     </div>
 
-                    <ExternalLink className="w-3.5 h-3.5 text-zinc-400 opacity-60 flex-shrink-0" />
+                    {/* Right Actions: Mute button available for all tabs, even if not playing music */}
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      {tab.audible && !tab.isMeeting && (
+                        <IconButton
+                          icon={Pause}
+                          label="Pause tab"
+                          onClick={(e) => handlePlayPauseToggle(e, tab.id)}
+                        />
+                      )}
+                      <IconButton
+                        icon={tab.muted ? VolumeX : Volume2}
+                        label={
+                          tab.muted
+                            ? tab.isMeeting
+                              ? 'Unmute meeting'
+                              : 'Unmute tab'
+                            : tab.isMeeting
+                            ? 'Mute meeting'
+                            : 'Mute tab'
+                        }
+                        danger={tab.muted}
+                        onClick={(e) => handleMuteToggle(e, tab)}
+                      />
+                    </div>
                   </div>
                 );
               })
@@ -437,6 +507,11 @@ export default function App() {
                           </div>
                           <div className="text-[11px] text-zinc-400 dark:text-zinc-500 truncate flex items-center gap-1.5">
                             <span>{tab.hostname}</span>
+                            {tab.isMeeting && (
+                              <span className="text-[9px] px-1 py-0.2 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 font-medium">
+                                Meeting
+                              </span>
+                            )}
                             {tab.muted && (
                               <span className="text-[10px] text-red-500 font-medium">
                                 (Muted)
@@ -445,16 +520,26 @@ export default function App() {
                           </div>
                         </div>
 
-                        {/* Right Actions: Exactly Two 28px IconButtons with 4px gap */}
+                        {/* Right Actions: Only show Pause for pausable media tabs; meetings only have Mute */}
                         <div className="flex items-center gap-1 flex-shrink-0">
-                          <IconButton
-                            icon={Pause}
-                            label="Pause tab"
-                            onClick={(e) => handlePlayPauseToggle(e, tab.id)}
-                          />
+                          {!tab.isMeeting && (
+                            <IconButton
+                              icon={Pause}
+                              label="Pause tab"
+                              onClick={(e) => handlePlayPauseToggle(e, tab.id)}
+                            />
+                          )}
                           <IconButton
                             icon={tab.muted ? VolumeX : Volume2}
-                            label={tab.muted ? 'Unmute tab' : 'Mute tab'}
+                            label={
+                              tab.muted
+                                ? tab.isMeeting
+                                  ? 'Unmute meeting'
+                                  : 'Unmute tab'
+                                : tab.isMeeting
+                                ? 'Mute meeting'
+                                : 'Mute tab'
+                            }
                             danger={tab.muted}
                             onClick={(e) => handleMuteToggle(e, tab)}
                           />
@@ -473,10 +558,10 @@ export default function App() {
                   <Clock className="w-3 h-3" />
                   <span>Recently Played (Past 30m)</span>
                 </div>
-                <span className="text-[10px]">{recentHistory.length} tabs</span>
+                <span className="text-[10px]">{displayRecentHistory.length} tabs</span>
               </div>
 
-              {recentHistory.length === 0 ? (
+              {displayRecentHistory.length === 0 ? (
                 <div className="px-4 py-4 text-center">
                   <p className="text-[11px] text-zinc-400 dark:text-zinc-500">
                     No recent audio history in the last 30 minutes
@@ -484,56 +569,101 @@ export default function App() {
                 </div>
               ) : (
                 <div className="divide-y divide-zinc-100/60 dark:divide-zinc-800/40 max-h-[190px] overflow-y-auto">
-                  {recentHistory.map((item) => (
-                    <div
-                      key={`${item.tabId}-${item.lastAudibleAt}`}
-                      onClick={() => {
-                        jumpToTab(item.tabId, item.windowId);
-                        window.close();
-                      }}
-                      className="px-3 py-2 flex items-center gap-2.5 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors"
-                    >
-                      {/* Favicon */}
-                      <div className="flex-shrink-0 w-4 h-4 flex items-center justify-center">
-                        {item.favicon ? (
-                          <img
-                            src={item.favicon}
-                            alt=""
-                            className="w-4 h-4 rounded-sm object-contain opacity-80"
-                            onError={(e) => {
-                              (e.target as HTMLElement).style.display = 'none';
-                            }}
-                          />
-                        ) : (
-                          <div className="w-3.5 h-3.5 rounded bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center text-[9px] font-bold text-zinc-600 dark:text-zinc-300">
-                            {item.hostname.charAt(0).toUpperCase()}
+                  {displayRecentHistory.map((item) => {
+                    const liveTab = allTabs.find((t) => t.id === item.tabId);
+                    const isMuted = liveTab?.muted ?? false;
+                    const isClosed = !liveTab;
+                    const cannotPlay = isClosed || unplayableTabIds.has(item.tabId) || !canTabPlayMedia(liveTab || item);
+                    return (
+                      <div
+                        key={`${item.tabId}-${item.lastAudibleAt}`}
+                        onClick={() => {
+                          jumpToTab(item.tabId, item.windowId);
+                          window.close();
+                        }}
+                        className="px-3 py-2 flex items-center gap-2.5 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors"
+                      >
+                        {/* Favicon */}
+                        <div className="flex-shrink-0 w-4 h-4 flex items-center justify-center">
+                          {item.favicon ? (
+                            <img
+                              src={item.favicon}
+                              alt=""
+                              className="w-4 h-4 rounded-sm object-contain opacity-80"
+                              onError={(e) => {
+                                (e.target as HTMLElement).style.display = 'none';
+                              }}
+                            />
+                          ) : (
+                            <div className="w-3.5 h-3.5 rounded bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center text-[9px] font-bold text-zinc-600 dark:text-zinc-300">
+                              {item.hostname.charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Title & Hostname */}
+                        <div className="flex-1 min-w-0">
+                          <div
+                            className={`text-xs font-normal truncate text-zinc-800 dark:text-zinc-200 ${
+                              isMuted ? 'opacity-70' : ''
+                            }`}
+                          >
+                            {item.title}
                           </div>
-                        )}
-                      </div>
-
-                      {/* Title & Hostname */}
-                      <div className="flex-1 min-w-0">
-                        <div className="text-xs font-normal truncate text-zinc-800 dark:text-zinc-200">
-                          {item.title}
+                          <div className="text-[11px] text-zinc-400 dark:text-zinc-500 truncate flex items-center gap-1.5">
+                            <span>{item.hostname}</span>
+                            {item.isMeeting && (
+                              <span className="text-[9px] px-1 py-0.2 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 font-medium">
+                                Meeting
+                              </span>
+                            )}
+                            {isMuted && (
+                              <span className="text-[10px] text-red-500 font-medium">
+                                (Muted)
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        <div className="text-[11px] text-zinc-400 dark:text-zinc-500 truncate">
-                          {item.hostname}
+
+                        {/* Right side: Time Ago + Mute + Play (for regular media) */}
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <span className="text-[10px] text-zinc-400 dark:text-zinc-500 mr-0.5">
+                            {formatTimeAgo(item.lastAudibleAt)}
+                          </span>
+                          {liveTab && (
+                            <IconButton
+                              icon={isMuted ? VolumeX : Volume2}
+                              label={
+                                isMuted
+                                  ? item.isMeeting
+                                    ? 'Unmute meeting'
+                                    : 'Unmute tab'
+                                  : item.isMeeting
+                                  ? 'Mute meeting'
+                                  : 'Mute tab'
+                              }
+                              danger={isMuted}
+                              onClick={(e) => handleMuteToggle(e, { id: item.tabId, muted: isMuted })}
+                            />
+                          )}
+                          {!item.isMeeting && (
+                            <IconButton
+                              icon={Play}
+                              label={
+                                isClosed
+                                  ? 'Tab is closed'
+                                  : cannotPlay
+                                  ? 'No music or media to play on this tab'
+                                  : 'Resume tab'
+                              }
+                              disabled={cannotPlay}
+                              onClick={(e) => handlePlayPauseToggle(e, item.tabId)}
+                            />
+                          )}
                         </div>
                       </div>
-
-                      {/* Right side: Time Ago + Action */}
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <span className="text-[10px] text-zinc-400 dark:text-zinc-500">
-                          {formatTimeAgo(item.lastAudibleAt)}
-                        </span>
-                        <IconButton
-                          icon={Play}
-                          label="Resume tab"
-                          onClick={(e) => handlePlayPauseToggle(e, item.tabId)}
-                        />
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </section>
@@ -570,7 +700,7 @@ export default function App() {
         <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-xs flex flex-col justify-end">
           <div className="bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800 rounded-t-xl p-4 shadow-2xl animate-in slide-in-from-bottom duration-150">
             <div className="flex items-center justify-between pb-2 border-b border-zinc-100 dark:border-zinc-800">
-              <h3 className="text-xs font-semibold">TabEcho Pro Features</h3>
+              <h3 className="text-xs font-semibold">TabWave Pro Features</h3>
               <button
                 onClick={() => setShowProModal(false)}
                 className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 p-0.5"

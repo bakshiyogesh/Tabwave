@@ -1,7 +1,7 @@
 import type { RecentAudioEntry } from './types';
-import { extractHostname } from './tabs';
+import { extractHostname, isLiveMeetingTab } from './tabs';
 
-const STORAGE_KEY = 'tabecho_recent_audio';
+const STORAGE_KEY = 'tabwave_recent_audio';
 const MAX_AGE_MS = 30 * 60 * 1000; // 30 minutes
 
 /**
@@ -25,7 +25,7 @@ export async function getRecentAudioHistory(): Promise<RecentAudioEntry[]> {
     // Sort with most recent first
     return validHistory.sort((a, b) => b.lastAudibleAt - a.lastAudibleAt);
   } catch (error) {
-    console.error('[TabEcho] Failed to retrieve audio history:', error);
+    console.error('[TabWave] Failed to retrieve audio history:', error);
     return [];
   }
 }
@@ -43,21 +43,25 @@ export async function recordAudioPlayback(tab: chrome.tabs.Tab): Promise<void> {
     // Remove existing entry for this tabId if present
     const filtered = history.filter((item) => item.tabId !== tab.id);
 
+    const hostname = extractHostname(tab.url);
+    const isMeeting = isLiveMeetingTab({ url: tab.url, hostname, title: tab.title });
+
     const newEntry: RecentAudioEntry = {
       tabId: tab.id,
       windowId: tab.windowId,
       title: tab.title || 'Untitled Tab',
       url: tab.url || '',
-      hostname: extractHostname(tab.url),
+      hostname,
       favicon: tab.favIconUrl,
       lastAudibleAt: now,
+      isMeeting,
     };
 
     // Prepend new entry and enforce max 50 items
     const updated = [newEntry, ...filtered].slice(0, 50);
     await chrome.storage.local.set({ [STORAGE_KEY]: updated });
   } catch (error) {
-    console.error('[TabEcho] Failed to record audio playback:', error);
+    console.error('[TabWave] Failed to record audio playback:', error);
   }
 }
 
@@ -70,7 +74,7 @@ export async function removeTabFromHistory(tabId: number): Promise<void> {
     const updated = history.filter((item) => item.tabId !== tabId);
     await chrome.storage.local.set({ [STORAGE_KEY]: updated });
   } catch (error) {
-    console.error(`[TabEcho] Failed to remove tab ${tabId} from history:`, error);
+    console.error(`[TabWave] Failed to remove tab ${tabId} from history:`, error);
   }
 }
 
@@ -104,7 +108,7 @@ export async function updateTabInHistory(
       await chrome.storage.local.set({ [STORAGE_KEY]: newHistory });
     }
   } catch (error) {
-    console.error(`[TabEcho] Failed to update tab ${tabId} in history:`, error);
+    console.error(`[TabWave] Failed to update tab ${tabId} in history:`, error);
   }
 }
 

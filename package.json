@@ -1,6 +1,6 @@
 {
-  "name": "tabecho",
-  "displayName": "TabEcho",
+  "name": "tabwave",
+  "displayName": "TabWave",
   "description": "Find, jump to, and mute tabs playing audio across all windows.",
   "private": true,
   "version": "1.0.0",

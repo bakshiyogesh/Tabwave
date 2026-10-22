@@ -1,8 +1,8 @@
-# TabEcho 🎧
+# TabWave 🎧
 
 > **Find, jump to, and mute any tab playing audio across 40+ tabs and multiple windows.**
 
-TabEcho is a lightweight, local-only Chrome extension (Manifest V3) that solves a universal frustration: *"I have 40 tabs open, something is playing audio, and I can't find which tab."*
+TabWave is a lightweight, local-only Chrome extension (Manifest V3) that solves a universal frustration: *"I have 40 tabs open, something is playing audio, and I can't find which tab."*
 
 ---
 
@@ -32,7 +32,7 @@ TabEcho is a lightweight, local-only Chrome extension (Manifest V3) that solves 
    - Shows the count of currently audible tabs on the extension icon; automatically clears when count is 0.
 7. **Keyboard Shortcuts (Commands API)**:
    - `Alt+P`: Jump directly to the most recently audible tab.
-   - `Alt+K`: Open the TabEcho popup.
+   - `Alt+K`: Open the TabWave popup.
 
 ---
 
@@ -83,7 +83,7 @@ pnpm install
 ```bash
 pnpm run dev
 ```
-This spins up the WXT dev server with Hot Module Replacement (HMR) and automatically launches an isolated Chrome instance with TabEcho loaded.
+This spins up the WXT dev server with Hot Module Replacement (HMR) and automatically launches an isolated Chrome instance with TabWave loaded.
 
 ### 3. Build for Production
 ```bash
@@ -99,7 +99,7 @@ The compiled, ready-to-load extension will be placed in `dist/chrome-mv3`.
    ```text
    /home/thirdweb/work/Tabwave/dist/chrome-mv3
    ```
-5. TabEcho is now installed and active! Pin it to your Chrome toolbar for quick access.
+5. TabWave is now installed and active! Pin it to your Chrome toolbar for quick access.
 
 ---
 
@@ -107,7 +107,7 @@ The compiled, ready-to-load extension will be placed in `dist/chrome-mv3`.
 
 | Shortcut | Action | Description |
 | :--- | :--- | :--- |
-| <kbd>Alt</kbd> + <kbd>K</kbd> | Open TabEcho | Triggers `_execute_action` to open popup |
+| <kbd>Alt</kbd> + <kbd>K</kbd> | Open TabWave | Triggers `_execute_action` to open popup |
 | <kbd>Alt</kbd> + <kbd>P</kbd> | Jump to Audio | Instantly focuses the most recently audible tab |
 | <kbd>↑</kbd> / <kbd>↓</kbd> | Navigate | Move selection up or down through the list |
 | <kbd>Enter</kbd> | Jump | Focus and activate the selected tab |
@@ -127,14 +127,14 @@ The compiled, ready-to-load extension will be placed in `dist/chrome-mv3`.
 - [x] **128x128** (`public/icon/128.png`): Chrome Web Store listing & installation
 
 ### 2. Store Metadata
-- **Extension Name**: TabEcho - Audio Tab Finder & Controller
+- **Extension Name**: TabWave - Audio Tab Finder & Controller
 - **Short Description (Max 132 chars)**:
   > *Instantly find, jump to, and mute any browser tab currently or recently playing audio across multiple windows.*
 - **Category**: Productivity / Accessibility
 - **Language**: English
 
 ### 3. Single Purpose Justification
-TabEcho exists solely to detect audible browser tabs, display their playback status, and allow users to switch to or mute them with minimal friction.
+TabWave exists solely to detect audible browser tabs, display their playback status, and allow users to switch to or mute them with minimal friction.
 
 ### 4. Permissions Justification
 - `tabs`: Required strictly to read `tab.audible`, `tab.mutedInfo`, title, URL, and favicon, and to invoke `chrome.tabs.update` for jumping and muting.
@@ -146,7 +146,7 @@ TabEcho exists solely to detect audible browser tabs, display their playback sta
 
 ## 🔒 Privacy Policy
 
-**TabEcho is 100% local and privacy-respecting:**
+**TabWave is 100% local and privacy-respecting:**
 - **Zero Tracking**: No analytics, telemetry, fingerprinting, or tracking scripts.
 - **Zero Network Calls**: No external servers, APIs, or databases. The extension functions completely offline.
 - **Local Storage Only**: The 30-minute audio history is stored strictly on your device inside `chrome.storage.local` and never leaves your browser.
@@ -171,10 +171,10 @@ To verify all features, perform this structured test across multiple windows:
 1. **Toolbar Badge**:
    - Confirm the extension icon displays a badge count of `3`.
 2. **"Now Playing" List**:
-   - Press <kbd>Alt</kbd>+<kbd>K</kbd> to open TabEcho.
+   - Press <kbd>Alt</kbd>+<kbd>K</kbd> to open TabWave.
    - Verify all 3 tabs appear under **Now Playing** with their favicons, hostnames (`youtube.com`, `x.com`, `open.spotify.com`), and animated equalizer bars.
 3. **Cross-Window Jump**:
-   - In Window 1, open TabEcho and click the Spotify tab row.
+   - In Window 1, open TabWave and click the Spotify tab row.
    - Verify Window 2 is focused and the Spotify tab is activated.
 4. **Per-Row Mute**:
    - Click the mute speaker icon on the YouTube row.
@@ -183,8 +183,8 @@ To verify all features, perform this structured test across multiple windows:
    - Click "Mute All" in the header; verify all playing tabs mute. Click "Unmute All" to restore.
 6. **"Recently Played" Section**:
    - Pause the Spotify playback.
-   - After a few moments, open TabEcho. Verify Spotify moved from **Now Playing** to **Recently Played** with a "Just now" timestamp.
-   - Close the Spotify tab. Re-open TabEcho and verify Spotify was removed from history.
+   - After a few moments, open TabWave. Verify Spotify moved from **Now Playing** to **Recently Played** with a "Just now" timestamp.
+   - Close the Spotify tab. Re-open TabWave and verify Spotify was removed from history.
 7. **Search & Keyboard Navigation**:
    - Type `you` in the search box.
    - Verify only matching tabs appear with an emerald "Playing" badge on YouTube.
